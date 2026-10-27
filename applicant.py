@@ -1,0 +1,15 @@
+applicant = {
+    "seniority": 3,
+    "home": "owner",
+    "time": 36,
+    "age": 69,
+    "marital": "married",
+    "records": "no",
+    "job": "fixed",
+    "expenses": 75,
+    "income": 120.0,
+    "assets": 3000.0,
+    "debt": 0.0,
+    "amount": 1000000,
+    "price": 1000,
+}

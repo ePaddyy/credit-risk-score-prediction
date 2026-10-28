@@ -1,96 +1,143 @@
-# Risk Score Prediction
+# CreditLens — Credit Risk Prediction
 
-A machine learning service that predicts the probability that a credit applicant will **default** on a loan. The final model is an XGBoost classifier, trained on the CreditScoring dataset, served with Flask and Gunicorn, and packaged in Docker.
+An end-to-end machine learning project that estimates the probability of credit default using XGBoost. CreditLens combines data preprocessing, model training and evaluation, decision-threshold selection, model explainability, and a Flask REST API.
 
-## Problem
+## Overview
 
-Lenders need to decide whether to approve a loan. Given an applicant's profile (job, income, assets, debt, loan amount, and so on), the model returns the probability of default, so a lender can rank applicants by risk instead of treating them all the same.
+CreditLens is designed to demonstrate how a trained machine learning model can be integrated into an API for credit-risk prediction.
 
-## Data
+The project covers the following stages:
 
-- **Source:** the CreditScoring dataset from the [mlbookcamp-code repository](https://github.com/alexeygrigorev/mlbookcamp-code/tree/master/chapter-06-trees).
-- **Target:** `status` (`default` = 1, `ok` = 0). Rows with unknown status were removed.
-- **Features:** `seniority`, `home`, `time`, `age`, `marital`, `records`, `job`, `expenses`, `income`, `assets`, `debt`, `amount`, `price`.
-- **Cleaning:** numeric codes were mapped to readable categories, and the placeholder value `99999999` in `income`, `assets` and `debt` was treated as missing.
+- Data cleaning and preprocessing
+- XGBoost model training
+- Model evaluation using classification metrics
+- Decision-threshold selection using validation data
+- Model persistence for reuse during inference
+- SHAP-based model explainability
+- REST API development with Flask
+- Automated API testing with pytest
+- Containerization with Docker
 
-## Approach
+**Important:** This project is for educational and demonstration purposes. Its predictions should not be used as the sole basis for real lending decisions.
 
-1. Split the data 60% train / 20% validation / 20% test.
-2. Build every model as a scikit-learn pipeline: `DictVectorizer` → `SimpleImputer(median)` → model (plus `StandardScaler` for logistic regression).
-3. Tune hyperparameters with 5-fold stratified cross-validation, scoring on ROC AUC.
-4. Retrain the best configuration of each model on train + validation, and compare them once on the held-out test set.
+## Tech Stack
 
-## Model comparison
+- Python
+- pandas and NumPy
+- scikit-learn
+- XGBoost
+- SHAP
+- Flask
+- pytest
+- Docker
 
-| Model | Test AUC |
-|---|---|
-| Logistic Regression | 0.82582 |
-| Decision Tree | 0.760144 |
-| Random Forest | 0.82256 |
-| **XGBoost (selected)** | 0.833188 |
+## Project Structure
 
-Selected XGBoost hyperparameters: `n_estimators=75`, `max_depth=3`, `learning_rate=0.1`.
-
-## Project structure
-
-```
-risk-score-prediction/
-├── data/                  # optional local copy of the dataset
-├── notebooks/             # exploration and model selection
-├── train.py               # cleans data, trains the final model, saves model_xgb.bin
-├── predict.py             # Flask app (/ping and /predict)
-├── test.py                # sends a sample applicant to the running service
-├── applicant.py           # sample applicant used by test.py
-├── test_model.py          # checks the pickled model directly
-├── model_xgb.bin          # trained pipeline
-├── Dockerfile
-├── .dockerignore
-├── .gitignore
-├── Pipfile
-├── Pipfile.lock
-└── README.md
+```text
+credit-risk-score-prediction/
+├── train.py           # Data preparation, training and evaluation
+├── predict.py         # Flask REST API
+├── explain.py         # SHAP model explainability, if included
+├── test_api.py        # Automated API tests
+├── applicant.py       # Applicant-related functionality, if included
+├── test.py            # Additional tests or scripts, if included
+├── model_xgb.bin      # Saved model artifact
+├── Dockerfile         # Docker image configuration
+├── requirements.txt   # Python dependencies
+├── .gitignore         # Files excluded from Git
+├── README.md          # Project documentation
+└── crsp.ipynb         # Exploratory analysis notebook
 ```
 
-## Run it
+The structure above describes the main files; filenames should be adjusted to match the final repository.
 
-### Locally
+## Getting Started
+
+### Prerequisites
+
+- Python and pip
+- Git
+- Docker, if running the containerized application
+
+### 1. Clone the repository
 
 ```bash
-pipenv install
-pipenv shell
-
-python train.py                              # creates model_xgb.bin
-gunicorn --bind 0.0.0.0:9696 predict:app     # start the service
+git clone https://github.com/ePaddyy/credit-risk-score-prediction.git
+cd credit-risk-score-prediction
 ```
 
-In a second terminal:
+### 2. Create a virtual environment
+
+Windows:
 
 ```bash
-python ping.py     # prints PONG
-python test.py     # sends a sample applicant
+python -m venv .venv
+.venv\Scripts\activate
 ```
 
-### With Docker
+Linux/macOS:
 
 ```bash
-docker build -t risk-score .
-docker run -it --rm -p 9696:9696 risk-score
+python3 -m venv .venv
+source .venv/bin/activate
 ```
 
-Then run `python ping.py` and `python test.py` from another terminal.
+### 3. Install dependencies
 
-## API
+```bash
+python -m pip install -r requirements.txt
+```
 
-**`GET /ping`** returns `PONG`.
+### 4. Train the model
 
-**`POST /predict`** takes one applicant as JSON:
+```bash
+python train.py
+```
+
+The training script prepares the dataset, trains the model, evaluates its performance, selects a decision threshold using validation data, and saves the model artifact.
+
+The saved artifact must be available at the location expected by the API.
+
+## Running the API
+
+Start the Flask application:
+
+```bash
+python predict.py
+```
+
+The API listens on port `9696`.
+
+### Health check
+
+**Endpoint:** `GET /ping`
+
+```bash
+curl http://localhost:9696/ping
+```
+
+Expected response:
+
+```json
+{
+  "status": "ok"
+}
+```
+
+### Make a prediction
+
+**Endpoint:** `POST /predict`
+
+**Content-Type:** `application/json`
+
+Example request:
 
 ```json
 {
   "seniority": 3,
   "home": "owner",
   "time": 36,
-  "age": 30,
+  "age": 69,
   "marital": "married",
   "records": "no",
   "job": "fixed",
@@ -98,29 +145,111 @@ Then run `python ping.py` and `python test.py` from another terminal.
   "income": 120.0,
   "assets": 3000.0,
   "debt": 0.0,
-  "amount": 800,
+  "amount": 1000000,
   "price": 1000
 }
 ```
 
-and returns:
+Example response structure:
 
 ```json
 {
-  "default_probability": 0.0,
-  "default": false
+  "default_probability": 0.4,
+  "threshold": 0.34,
+  "default": true
 }
 ```
 
-(The values above are illustrative. Run `python test.py` to see a real response.) A `null` for `income`, `assets` or `debt` is filled in with the training median.
+The probability above is illustrative, not a measured prediction for the example applicant.
 
-## Notes and limitations
+The API returns:
 
-- The decision threshold is `0.5`. In a real lending setting it should be tuned to the relative cost of approving a defaulter versus rejecting a good applicant.
-- Categorical values must match the training categories (for example `home`: `rent`, `owner`, `private`, `ignore`, `parents`, `other`, `unk`). Unseen categories are silently ignored by the vectorizer.
-- The pickle depends on library versions, so use the versions pinned in `Pipfile.lock`.
-- This is a learning project on a small public dataset, not a production credit-scoring system.
+- `default_probability`: the model's estimated probability of default.
+- `threshold`: the decision cutoff selected during model development.
+- `default`: whether the probability meets or exceeds that cutoff.
 
-## Tech stack
+The example threshold is `0.34`. A probability greater than or equal to the threshold produces `true`; otherwise, it produces `false`.
 
-Python 3.11, pandas, scikit-learn, XGBoost, Flask, Gunicorn, Pipenv, Docker.
+The selected threshold is an operating choice based on validation performance, not a universal credit-risk standard.
+
+## Model Evaluation
+
+The training script evaluates the model using metrics such as:
+
+- ROC-AUC
+- Precision
+- Recall
+- F1-score
+- Average precision (PR-AUC)
+- Confusion matrix
+
+The decision threshold is selected using validation data. The held-out test set is then used to assess the model's performance at that threshold.
+
+Add the final test-set metrics from your latest training run here before publishing the project.
+
+## Model Explainability
+
+SHAP (SHapley Additive exPlanations) can be used to examine how input features influence the model's predictions.
+
+The explainability script can generate global feature-importance and summary plots, depending on the implementation in the repository.
+
+These explanations describe model behavior; they do not establish that a feature causes credit default.
+
+## Automated Testing
+
+Run the API tests with:
+
+```bash
+pytest -v
+```
+
+The tests cover API health checks, valid predictions, missing fields, invalid input, and handling of null numerical values.
+
+## Docker
+
+Build the Docker image from the directory containing the Dockerfile:
+
+```bash
+docker build -t risk-score:latest .
+```
+
+Run the container:
+
+```bash
+docker run -d --name creditlens-container -p 9696:9696 risk-score:latest
+```
+
+Check the container:
+
+```bash
+docker ps
+docker logs creditlens-container
+```
+
+Test the health endpoint:
+
+```bash
+curl http://localhost:9696/ping
+```
+
+The Docker image must include the application dependencies and make the trained model artifact available at the path expected by the API.
+
+To update the application after changing the model or source code, rebuild the image and recreate the container.
+
+## Limitations and Responsible Use
+
+- Model performance depends on the training data and evaluation methodology.
+- A probability estimate is not a guarantee of a future outcome.
+- Threshold selection involves trade-offs between false positives and false negatives.
+- The model should be assessed for fairness, bias, calibration, and suitability before any real-world credit use.
+- Applicant data should be handled securely and in accordance with applicable privacy requirements.
+
+## Author
+
+**Emmanuel Paddy Adams**
+
+GitHub: [ePaddyy](https://github.com/ePaddyy)
+
+## Acknowledgements
+
+The project uses open-source Python machine learning libraries and a publicly available credit-scoring dataset for educational model development.
